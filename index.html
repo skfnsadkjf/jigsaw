@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<head>
+	<meta charset="utf-8">
+	<title>Jigsaw</title>
+	<link rel="stylesheet" href="index.css"/>
+	<script src="m4.js"></script>
+	<script src="index.js" defer></script>
+</head>
+<body>
+	<canvas id="canvasWebGL"></canvas>
+	<div id="menu">
+		<label for="fileInput" style="cursor:pointer;">Load File (image/video)</label>
+		<input id="fileInput" type="file" style="display:none;" multiple>
+		<input id="piecesInput" type="number" value="100">
+		<p id="startPuzzle">Start Puzzle</p>
+		<div id="preview"></div>
+	</div>
+	<audio id="audioClick" preload="auto"><source src="click.webm" type="audio/webm"></audio>
+	<audio id="audioComplete" preload="auto"><source src="complete.webm" type="audio/webm"></audio>
+</body>
+

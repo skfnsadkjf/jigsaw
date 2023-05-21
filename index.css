@@ -1,0 +1,24 @@
+body>*{
+	position: absolute;
+}
+#menu{
+	z-index: 1;
+}
+#startPuzzle{
+	cursor: pointer;
+}
+img,video{
+	max-width: 100px;
+	max-height: 100px;
+}
+canvas{
+	background: #191919;
+	left: 0px;
+	top: 0px;
+}
+input{
+	display: block;
+}
+#preview{
+	display: none;
+}
