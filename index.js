@@ -1,11 +1,11 @@
 
-// higher DELTA_SCORE_PENATLY_MULT results in smaller possible differences between the desired number
+// higher DELTA_SCORE_PENALTY_MULT results in smaller possible differences between the desired number
 // of pieces and the actual number of pieces, but at the cost of piece being less square.
-const DELTA_SCORE_PENATLY_MULT = 2;
+const DELTA_SCORE_PENALTY_MULT = 2;
 const ZOOM_FACTOR = 1.15;
 const PIECE_CONNECT_DISTANCE = 0.25; // This times piece width is the maximum snap distace when connecting pieces.
-const SELECTION_OUTLINE_WIDTH = 0.03; // as a proportion of piece width.
-
+const SELECTION_OUTLINE_WIDTH = 0.03; // As a proportion of piece width.
+const CAMERA_PAN_SPEED = 1; // As a propotion of average viewport width and height per second.
 
 
 const vertexShaderSource = `
@@ -86,7 +86,7 @@ const drawScene = ( gl , texture ) => {
 		const dstW = puzzle.pieceWidth - pieceGap;
 		const dstH = puzzle.pieceHeight - pieceGap;
 		// LOWER z values are DRAWN OVERTOP higher values.
-		const z = piece.groupSize / puzzle.pieces.length - ( piece.moving ? 1 : 0 );
+		const z = piece.groupSize / puzzle.pieceAmount - ( piece.moving ? 1 : 0 );
 		drawImage( texture , puzzle.width , puzzle.height , srcX , srcY , srcW , srcH , dstX , dstY , dstW , dstH , z );
 		if ( piece.selected ) { // draw white box as outline behind drawn piece.
 			const outline = puzzle.pieceWidth * SELECTION_OUTLINE_WIDTH;
@@ -94,15 +94,15 @@ const drawScene = ( gl , texture ) => {
 			const dstY2 = dstY - outline;
 			const dstW2 = dstW + 2 * outline;
 			const dstH2 = dstH + 2 * outline;
-			const z2 = z + 0.5 / puzzle.pieces.length;
+			const z2 = z + 0.5 / puzzle.pieceAmount;
 			drawImage( outlineTexture , 1 , 1 , 0 , 0 , 1 , 1 , dstX2 , dstY2 , dstW2 , dstH2 , z2 );
 		}
 	} );
-	if ( boxSelect.active ) {
-		const x = Math.min( boxSelect.start.x , boxSelect.end.x );
-		const y = Math.min( boxSelect.start.y , boxSelect.end.y );
-		const w = Math.max( boxSelect.start.x , boxSelect.end.x ) - x;
-		const h = Math.max( boxSelect.start.y , boxSelect.end.y ) - y;
+	if ( puzzle.boxSelect ) {
+		const x = Math.min( camera.mousedownX , camera.mouseX );
+		const y = Math.min( camera.mousedownY , camera.mouseY );
+		const w = Math.max( camera.mousedownX , camera.mouseX ) - x;
+		const h = Math.max( camera.mousedownY , camera.mouseY ) - y;
 		drawImage( boxSelectTexture , 1 , 1 , 0 , 0 , 1 , 1 , x , y , w , h , -1 );
 	}
 }
@@ -116,21 +116,6 @@ const checkSourceReady = el => {
 	const imageReady = tag == "img" && el.complete && el.naturalHeight !== 0;
 	return videoReady || imageReady;
 }
-const render = now => {
-	if ( !puzzle.sourceReadyToDraw ) {
-		puzzle.sourceReadyToDraw = checkSourceReady( puzzle.source );
-		if ( puzzle.sourceReadyToDraw && !puzzle.isVideo ) {
-			updateTexture( gl , texture , puzzle.source ); // only do updateTexture once for images.
-		}
-	}
-	if ( puzzle.sourceReadyToDraw ) {
-		if ( puzzle.isVideo ) { // not updateTexture'ing for images matters a lot for cpu usage.
-			updateTexture( gl , texture , puzzle.source );
-		}
-		drawScene( gl , texture );
-	}
-	window.requestAnimationFrame(render);
-}
 const updateCanvasSize = e => {
 	glCanvas.width = window.innerWidth;
 	glCanvas.height = window.innerHeight;
@@ -143,11 +128,6 @@ const zoom = e => {
 	camera.x += e.clientX / camera.zoom - e.clientX / newZoom;
 	camera.y += e.clientY / camera.zoom - e.clientY / newZoom;
 	camera.zoom = Math.max( 0.1 , Math.min( 2 , newZoom ) );
-}
-const mouseenter = e => {
-	if ( e.buttons != 1 ) {
-		puzzle.pieces.forEach( v => v.moving = false );
-	}
 }
 const attemptConnections = ( piece ) => {
 	piece.neighbours.forEach( ( neighbour , i ) => {
@@ -172,14 +152,16 @@ const attemptConnections = ( piece ) => {
 				a.forEach( v => v.group = newGroup );
 				a.forEach( v => v.groupSize = a.length );
 
-
+				puzzle.connectionCount += 1;
+				document.querySelector( "#pieceCount>span" ).textContent = puzzle.connectionCount + " / " + puzzle.pieceAmount;
 				const isComplete = puzzle.pieces.every( v => v.group == 0 );
 				if ( isComplete ) {
 					audioComplete.play();
 					puzzle.complete = true;
-					return
 				}
-				audioClick.play();
+				else {
+					audioClick.play();
+				}
 			}
 		}
 	} );
@@ -188,62 +170,58 @@ const mouseup = e => {
 	if ( e.button == 0 ) { // left mouse button lifted
 		const movingPieces = puzzle.pieces.filter( v => v.moving );
 		movingPieces.forEach( v => v.moving = false );
+		camera.panX = 0;
+		camera.panY = 0;
 		const allMovingPiecesSameGroup = movingPieces.every( v => v.group == movingPieces[0].group );
 		if ( allMovingPiecesSameGroup && movingPieces.length > 0 ) {
 			movingPieces.forEach( piece => attemptConnections( piece ) );
 		}
-		if ( boxSelect.active ) {
+		if ( puzzle.boxSelect ) {
 			// Make a set with all the group ids in the box selection, then select all pieces whose
 			// group id is in the set. If holding shift, don't deselect pieces that aren't in the box.
-			const x1 = Math.min( boxSelect.start.x , boxSelect.end.x ) - puzzle.pieceWidth;
-			const y1 = Math.min( boxSelect.start.y , boxSelect.end.y ) - puzzle.pieceHeight;
-			const x2 = Math.max( boxSelect.start.x , boxSelect.end.x );
-			const y2 = Math.max( boxSelect.start.y , boxSelect.end.y );
+			const x1 = Math.min( camera.mousedownX , camera.mouseX ) - puzzle.pieceWidth;
+			const y1 = Math.min( camera.mousedownY , camera.mouseY ) - puzzle.pieceHeight;
+			const x2 = Math.max( camera.mousedownX , camera.mouseX );
+			const y2 = Math.max( camera.mousedownY , camera.mouseY );
 			const a = puzzle.pieces.filter( v => v.x >= x1 && v.x <= x2 && v.y >= y1 && v.y <= y2 );
 			const groups = new Set( a.map( v => v.group ) );
 			puzzle.pieces.forEach( v => v.selected = ( v.selected && e.shiftKey ) || groups.has( v.group ) );
-			boxSelect.active = false;
+			puzzle.boxSelect = false;
 		}
 	}
 }
 const panCamera = ( deltaX , deltaY ) => {
-	const x = camera.x - deltaX;
-	const y = camera.y - deltaY;
+	const x = camera.x + deltaX;
+	const y = camera.y + deltaY;
 	const w = -glCanvas.clientWidth / camera.zoom;
 	const h = -glCanvas.clientHeight / camera.zoom;
 	camera.x = Math.max( w + 10 , Math.min( puzzle.playArea.width - 10 , x ) );
 	camera.y = Math.max( h + 10 , Math.min( puzzle.playArea.height - 10 , y ) );
+	camera.mouseX += deltaX;
+	camera.mouseY += deltaY;
 }
 const mousemove = e => {
-	if ( e.buttons != 0 ) {
-		const x = e.x / camera.zoom + camera.x;
-		const y = e.y / camera.zoom + camera.y;
-		const deltaX = e.movementX / camera.zoom;
-		const deltaY = e.movementY / camera.zoom;
-		// either move selected pieces or alter box selection.
-		if ( e.buttons == 1 ) {
-			puzzle.pieces.filter( v => v.moving ).forEach( piece => {
-				piece.x = x + piece.movingOffset.x;
-				piece.y = y + piece.movingOffset.y;
-			} );
-			if ( boxSelect.active ) {
-				boxSelect.end = { "x" : x , "y" : y };
-			}
-		}
-		// pan camera if any of the following are held: right, right+left, middle or middle+left.
-		if ( e.buttons >=2 && e.buttons <= 5 ) {
-			panCamera( deltaX , deltaY );
-		}
+	const mouseXClamped = Math.max( 0 , Math.min( window.innerWidth , e.x ) );
+	const mouseYClamped = Math.max( 0 , Math.min( window.innerHeight , e.y ) );
+	camera.mouseX = mouseXClamped / camera.zoom + camera.x;
+	camera.mouseY = mouseYClamped / camera.zoom + camera.y;
+	// set if the screen should be panning. Pan happens when dragging piece or selection box to edge of screen.
+	if ( e.buttons == 1 ) {
+		const windowSize = 0.5 * ( window.innerWidth + window.innerHeight );
+		const panSpeed = ( CAMERA_PAN_SPEED * windowSize ) / camera.zoom;
+		camera.panX = e.x <= 0 ? -panSpeed : e.x >= window.innerWidth ? panSpeed : 0;
+		camera.panY = e.y <= 0 ? -panSpeed : e.y >= window.innerHeight ? panSpeed : 0;
+	}
+	// pan camera if any of the following are held: right, right+left, middle or middle+left.
+	if ( e.buttons >=2 && e.buttons <= 5 ) {
+		panCamera( -e.movementX / camera.zoom , -e.movementY / camera.zoom );
 	}
 }
 const mousedown = e => {
 	if ( e.buttons == 1 ) {
-		const x = e.x / camera.zoom + camera.x;
-		const y = e.y / camera.zoom + camera.y;
-		// get topmost piece clicked on.
 		const piecesUnderMouse = puzzle.pieces.filter( piece => {
-			const withinX = x > piece.x && x < piece.x + puzzle.pieceWidth;
-			const withinY = y > piece.y && y < piece.y + puzzle.pieceHeight;
+			const withinX = camera.mouseX > piece.x && camera.mouseX < piece.x + puzzle.pieceWidth;
+			const withinY = camera.mouseY > piece.y && camera.mouseY < piece.y + puzzle.pieceHeight;
 			return withinX && withinY
 		} );
 		if ( piecesUnderMouse.length > 0 ) { // setup piece movement.
@@ -259,18 +237,53 @@ const mousedown = e => {
 				const movingPieces = puzzle.pieces.filter( v => v.selected || ( v.group == piece.group ) );
 				movingPieces.forEach( v => {
 					v.moving = true;
-					v.movingOffset.x = v.x - x;
-					v.movingOffset.y = v.y - y;
+					v.movingOffset.x = v.x - camera.mouseX;
+					v.movingOffset.y = v.y - camera.mouseY;
 				});
 			}
 		}
 		else {
-			boxSelect.active = true;
-			boxSelect.start = { "x" : x , "y" : y };
-			boxSelect.end = { "x" : x , "y" : y };
-			console.log( "boxSelect mousedown")
+			puzzle.boxSelect = true;
+			camera.mousedownX = camera.mouseX;
+			camera.mousedownY = camera.mouseY;
 		}
 	}
+}
+const updatePiecePositions = () => {
+	puzzle.pieces.filter( v => v.moving ).forEach( piece => {
+		piece.x = piece.movingOffset.x + camera.mouseX;
+		piece.y = piece.movingOffset.y + camera.mouseY;
+	} );
+}
+const render = now => {
+	if ( camera.panX != 0 || camera.panY != 0 ) {
+		const time = now - timeAtPreviousFrame;
+		panCamera( camera.panX * ( time / 1000 ) , camera.panY * ( time / 1000 ) );
+	}
+	updatePiecePositions();
+	if ( !puzzle.complete && ( now % 1000 <= timeAtPreviousFrame % 1000 ) ) {
+		const time = now - puzzle.startTime;
+		const hours = Math.floor( time / 3600000 );
+		const minutes = Math.floor( time / 60000 ) % 60;
+		const seconds = Math.floor( time / 1000 ) % 60;
+		const str = ( hours > 0 ? hours + ":" : "" ) + ( minutes < 10 ? "0" : "" ) + minutes + ":" + ( seconds < 10 ? "0" : "" ) + seconds;
+		document.querySelector( "#timer>span" ).textContent = str;
+	}
+
+	if ( !puzzle.sourceReadyToDraw ) {
+		puzzle.sourceReadyToDraw = checkSourceReady( puzzle.source );
+		if ( puzzle.sourceReadyToDraw && !puzzle.isVideo ) {
+			updateTexture( gl , texture , puzzle.source ); // only do updateTexture once for images.
+		}
+	}
+	if ( puzzle.sourceReadyToDraw ) {
+		if ( puzzle.isVideo ) { // not updateTexture'ing for images matters a lot for cpu usage.
+			updateTexture( gl , texture , puzzle.source );
+		}
+		drawScene( gl , texture );
+	}
+	timeAtPreviousFrame = now;
+	window.requestAnimationFrame(render);
 }
 const generatePuzzleDimensions = ( width , height , desiredPieces ) => {
 	// Generates best amount of rows, columns and amount of pieces.
@@ -295,7 +308,7 @@ const generatePuzzleDimensions = ( width , height , desiredPieces ) => {
 			}
 		}
 		delta = ( delta + ( delta >= 0 ? 1 : 0 ) ) * -1; // 0 => -1 => 1 => -2 => 2 => -3 ....
-		deltaScorePenalty = Math.abs( DELTA_SCORE_PENATLY_MULT * delta / desiredPieces );
+		deltaScorePenalty = Math.abs( DELTA_SCORE_PENALTY_MULT * delta / desiredPieces );
 	}
 	return best
 }
@@ -307,16 +320,21 @@ const puzzleInit = () => {
 	puzzle.isVideo = s.tagName == "VIDEO";
 	puzzle.width = puzzle.isVideo ? s.videoWidth : s.naturalWidth;
 	puzzle.height = puzzle.isVideo ? s.videoHeight : s.naturalHeight;
-	// Add rows, columns and pieces properties to puzzle.
-	Object.assign( puzzle , generatePuzzleDimensions( puzzle.width , puzzle.height , desiredPieces ) );
+	const bestLayout = generatePuzzleDimensions( puzzle.width , puzzle.height , desiredPieces );
+	puzzle.rows = bestLayout.rows;
+	puzzle.columns = bestLayout.columns;
+	puzzle.pieceAmount = bestLayout.pieces;
 	puzzle.pieceWidth = puzzle.width / puzzle.columns;
 	puzzle.pieceHeight = puzzle.height / puzzle.rows;
 	puzzle.playArea = { "width" : 3 * puzzle.width , "height" : 3 * puzzle.height };
 	puzzle.pieceConnectDistace = PIECE_CONNECT_DISTANCE * puzzle.pieceWidth;
 	puzzle.selectionOutlineWidth = SELECTION_OUTLINE_WIDTH * puzzle.pieceWidth;
 	puzzle.complete = false;
+	puzzle.boxSelect = false;
+	puzzle.startTime = window.performance.now();
+	puzzle.connectionCount = 1;
 
-	puzzle.pieces = Array.from( { "length" : puzzle.pieces } , v => { return {} } );
+	puzzle.pieces = Array.from( { "length" : puzzle.pieceAmount } , v => { return {} } );
 	puzzle.pieces.forEach( ( piece , i , pieces ) => {
 		piece.index = i;
 		piece.group = i;
@@ -336,19 +354,40 @@ const puzzleInit = () => {
 		piece.y = undefined; // defined further down
 	} );
 	// make an array of random positions, then set each piece to one of them.
-	const random = Array.from( { "length" : puzzle.pieces.length } , v => Math.random() );
+	const random = Array.from( { "length" : puzzle.pieceAmount } , v => Math.random() );
 	const indexes = random.map( ( v , i ) => i ).sort( ( a , b ) => random[a] < random[b] );
 	indexes.forEach( ( v , i ) => {
 		puzzle.pieces[v].x = ( i % puzzle.columns ) * 1.2 * puzzle.pieceWidth + 0.2 * puzzle.pieceWidth;
 		puzzle.pieces[v].y = Math.floor( i / puzzle.columns ) * 1.2 * puzzle.pieceHeight + 0.2 * puzzle.pieceHeight;
 	} );
-
-	glCanvas.addEventListener( "mousemove" , mousemove );
-	glCanvas.addEventListener( "mousedown" , mousedown );
-	glCanvas.addEventListener( "mouseup" , mouseup );
-	glCanvas.addEventListener( "wheel" , zoom );
-	glCanvas.addEventListener( "mouseenter" , mouseenter );
+ 	// events need to be document instead of canvas to allow firing when mouse is outside viewport.
+	document.addEventListener( "mousemove" , mousemove );
+	document.addEventListener( "mousedown" , mousedown );
+	document.addEventListener( "mouseup" , mouseup );
+	document.addEventListener( "wheel" , zoom );
+	document.querySelector( "#pieceCount>span" ).textContent = puzzle.connectionCount + " / " + puzzle.pieceAmount;
+	document.querySelector( "#menu" ).style.display = "none";
 	window.requestAnimationFrame( render );
+}
+const setVolume = e => {
+	const video = document.querySelector( "#preview video" );
+	if ( video ) {
+		video.volume = e.target.value;
+	}
+}
+const toggleDisplayNone = elem => {
+	elem.style.display = elem.style.display ? "" : "none";
+}
+const menuToggle = e => {
+	toggleDisplayNone( document.querySelector( "#menu" ) );
+}
+const muteToggle = e => {
+	muted = !muted;
+	[...e.currentTarget.children].forEach( v => toggleDisplayNone( v ) );
+	const video = document.querySelector( "#preview>video" );
+	if ( video ) {
+		video.muted = muted;
+	}
 }
 const showFileInput = e => {
 	const elems = [...e.target.files].map( file => {
@@ -356,9 +395,11 @@ const showFileInput = e => {
 			const isVideo = file.type.match( /^video\// );
 			const elem = document.createElement( isVideo ? "video" : "img" );
 			if ( isVideo ) {
-				elem.muted = "true";
-				elem.loop = "true";
-				elem.autoplay = "true";
+				// elem.volume = "0";
+				elem.volume = document.querySelector( "#volumeSlider" ).value;
+				elem.muted = muted;
+				elem.loop = true;
+				elem.autoplay = true;
 			}
 			const reader = new FileReader();
 			reader.onload = e => elem.src = e.target.result;
@@ -373,11 +414,25 @@ const audioClick = document.querySelector( "#audioClick" );
 const audioComplete = document.querySelector( "#audioComplete" );
 audioClick.volume = 1;
 audioComplete.volume = 1;
-let puzzle = {};
-let boxSelect = {}; // will have "start", "end" and "active" properties after it's initialized.
-let camera = { "x" : 50 , "y" : 50 , "zoom" : 0.5 };
+let muted = true;
+const puzzle = {};
+const camera = { // all camera x and y values are in puzzle coordinate, not viewport coordinates.
+	"x" : -50 ,
+	"y" : -50 ,
+	"zoom" : 0.5 ,
+	"panX" : 0 ,
+	"panY" : 0 ,
+	"mouseX" : 0 ,
+	"mouseY" : 0 ,
+	"mousedownX" : 0 ,
+	"mousedownY" : 0 ,
+};
+let timeAtPreviousFrame = 0;
 document.querySelector( "#fileInput" ).addEventListener( "change" , showFileInput );
 document.querySelector( "#startPuzzle" ).addEventListener( "click" , puzzleInit );
+document.querySelector( "#menuButton" ).addEventListener( "click" , menuToggle );
+document.querySelector( "#mute" ).addEventListener( "click" , muteToggle );
+document.querySelector( "#volumeSlider" ).addEventListener( "input" , setVolume );
 window.addEventListener( "resize" , updateCanvasSize );
 
 // ============================================================================
@@ -445,19 +500,16 @@ const backgroundTexture = createTexture( [70 , 130 , 180 , 255] ); // #4682B4 li
 
 
 
-
-
-
-
-
 // =====plans=====
+
+// add a reload video button
+	// or fix the video shitting up????
 
 // draw faint lines between connected pieces
 	// currently have a bad hack solution where I just draw slightly smaller squares.
 	// It's currently bad and I'd prefer to have solid black lines.
 	// look in to drawing gl lines instead of triangles.
 
-// box selection should scroll the screen if mouse touches sides.
 
 // timer. end timer on completion
 // favicon

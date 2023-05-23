@@ -1,24 +1,67 @@
 body>*{
 	position: absolute;
 }
-#menu{
-	z-index: 1;
-}
-#startPuzzle{
-	cursor: pointer;
-}
-img,video{
-	max-width: 100px;
-	max-height: 100px;
-}
 canvas{
+	z-index: 0;
 	background: #191919;
 	left: 0px;
 	top: 0px;
 }
-input{
-	display: block;
+.clickable{
+	cursor: pointer;
 }
+.menuButton{
+	border: 3px solid #cccccc;
+	border-radius: 10px;
+	padding: 5px;
+}
+.menuButton:hover{
+	color: white;
+}
+
+.hudElement{
+	display: inline;
+	background-color: #111111;
+	color: #cccccc;
+	white-space: nowrap;
+	font-size: 18px;
+	font-family: Arial, Helvetica, sans-serif;
+	border-radius: 15px;
+	padding: 7px 9px;
+	margin-right: 5px;
+	margin-bottom: 5px;
+}
+
+
+
+#menu{
+	z-index: 2;
+	top: 50px;
+	padding: 15px;
+}
+/*input{ display: block; }*/
 #preview{
 	display: none;
 }
+#preview>*{
+	max-width: 100px;
+	max-height: 100px;
+}
+
+
+
+#hud{ z-index: 1; }
+#hud svg{
+	height: 1em;
+	width: 1em;
+	position: relative;
+	left: 2.5px;
+}
+#hud span{ padding: 0px 3px; }
+#timer>svg{ top: 2.5px; }
+#pieceCount>svg{ top: 1.5px; }
+#menuButton>svg{ top: 2px; }
+#mute>svg{ top: 1.5px; }
+#mute{ padding-right: 11px; }
+
+
