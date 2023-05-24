@@ -249,6 +249,9 @@ const mousedown = e => {
 			camera.mousedownY = camera.mouseY;
 		}
 	}
+	if ( e.button == 1 ) {
+		e.preventDefault(); // prevents middle click opening scroll thingy
+	}
 }
 const updatePiecePositions = () => {
 	puzzle.pieces.filter( v => v.moving ).forEach( piece => {
@@ -363,6 +366,7 @@ const puzzleInit = () => {
 	document.addEventListener( "mousedown" , mousedown );
 	document.addEventListener( "mouseup" , mouseup );
 	document.addEventListener( "wheel" , zoom );
+	document.addEventListener( "contextmenu" , e => e.preventDefault() );
 	document.querySelector( "#pieceCount>span" ).textContent = puzzle.connectionCount + " / " + puzzle.pieceAmount;
 	document.querySelector( "#menu" ).style.display = "none";
 	window.requestAnimationFrame( render );
