@@ -39,13 +39,10 @@ canvas{
 	top: 50px;
 	padding: 15px;
 }
-/*input{ display: block; }*/
-#preview{
-	display: none;
-}
 #preview>*{
 	max-width: 100px;
 	max-height: 100px;
+	display: none;
 }
 
 

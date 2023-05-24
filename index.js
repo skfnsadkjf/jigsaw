@@ -1,6 +1,6 @@
 
 // higher DELTA_SCORE_PENALTY_MULT results in smaller possible differences between the desired number
-// of pieces and the actual number of pieces, but at the cost of piece being less square.
+// of pieces and the actual number of pieces, but at the cost of pieces being less square.
 const DELTA_SCORE_PENALTY_MULT = 2;
 const ZOOM_FACTOR = 1.15;
 const PIECE_CONNECT_DISTANCE = 0.25; // This times piece width is the maximum snap distace when connecting pieces.
@@ -51,7 +51,7 @@ const drawImage = (	tex , texWidth , texHeight , srcX , srcY , srcW , srcH , dst
 	const y = dstH * ( 2 / ( top - bottom ) );
 	const tx = ( left + right ) / ( left - right ) + ( 2 / ( right - left ) ) * dstX;
 	const ty = ( bottom + top ) / ( bottom - top ) + ( 2 / ( top - bottom ) ) * dstY;
-	let matrix = [
+	const matrix = [
 		 x,  0,  0,  0,
 		 0,  y,  0,  0,
 		 0,  0,  0,  0,
@@ -74,7 +74,7 @@ const drawScene = ( gl , texture ) => {
 	// Clear the canvas before we start drawing on it.
 	gl.clear( gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT );
 
-	const pieceGap = puzzle.complete ? 0 : 0.2 / camera.zoom;
+	const pieceGap = puzzle.complete ? 0 : 0.3 / camera.zoom;
 	drawImage( backgroundTexture , 1 , 1 , 0 , 0 , 1 , 1 , 0 , 0 , puzzle.playArea.width , puzzle.playArea.height , 1 );
 	puzzle.pieces.forEach( piece => {
 		const srcX = piece.column / puzzle.columns;
@@ -136,7 +136,8 @@ const attemptConnections = ( piece ) => {
 			const offsetY = ( ( 2 - i ) % 2 ) * puzzle.pieceHeight; // = (0,1,0,-1) * height.
 			const x = neighbour.x - offsetX - piece.x;
 			const y = neighbour.y - offsetY - piece.y;
-			if ( Math.sqrt( x ** 2 + y ** 2 ) < puzzle.pieceConnectDistace ) {
+			const pieceConnectDistace = PIECE_CONNECT_DISTANCE * puzzle.pieceWidth;
+			if ( Math.sqrt( x ** 2 + y ** 2 ) < pieceConnectDistace ) {
 				// Snap selected pieces into flush connection.
 				puzzle.pieces.filter( v => v.group == piece.group ).forEach( piece => {
 					piece.x += x;
@@ -287,10 +288,9 @@ const render = now => {
 }
 const generatePuzzleDimensions = ( width , height , desiredPieces ) => {
 	// Generates best amount of rows, columns and amount of pieces.
-	// E.g a desired width to height ratio of 9:6 with 5 pieces can't exist,
-	// and gets rounded to 3x2 with 6 pieces.
+	// E.g a width to height ratio of 9:6 with 5 pieces shouldn't exist and gets rounded to 3x2 with 6 pieces.
 	const imageRatio = Math.max( width , height ) / Math.min( width , height );
-	let best = { "pieces" : undefined , "score" : Infinity , "rows" : undefined , "columns" : undefined };
+	const best = { "pieces" : undefined , "score" : Infinity , "rows" : undefined , "columns" : undefined };
 	let delta = 0;
 	let deltaScorePenalty = 0;
 	while ( best.score > deltaScorePenalty ) { // check different piece amounts until all future guesses must be worse than our best piece amount.
@@ -327,8 +327,6 @@ const puzzleInit = () => {
 	puzzle.pieceWidth = puzzle.width / puzzle.columns;
 	puzzle.pieceHeight = puzzle.height / puzzle.rows;
 	puzzle.playArea = { "width" : 3 * puzzle.width , "height" : 3 * puzzle.height };
-	puzzle.pieceConnectDistace = PIECE_CONNECT_DISTANCE * puzzle.pieceWidth;
-	puzzle.selectionOutlineWidth = SELECTION_OUTLINE_WIDTH * puzzle.pieceWidth;
 	puzzle.complete = false;
 	puzzle.boxSelect = false;
 	puzzle.startTime = window.performance.now();
@@ -355,7 +353,7 @@ const puzzleInit = () => {
 	} );
 	// make an array of random positions, then set each piece to one of them.
 	const random = Array.from( { "length" : puzzle.pieceAmount } , v => Math.random() );
-	const indexes = random.map( ( v , i ) => i ).sort( ( a , b ) => random[a] < random[b] );
+	const indexes = random.map( ( v , i ) => i ).sort( ( a , b ) => random[a] - random[b] );
 	indexes.forEach( ( v , i ) => {
 		puzzle.pieces[v].x = ( i % puzzle.columns ) * 1.2 * puzzle.pieceWidth + 0.2 * puzzle.pieceWidth;
 		puzzle.pieces[v].y = Math.floor( i / puzzle.columns ) * 1.2 * puzzle.pieceHeight + 0.2 * puzzle.pieceHeight;
@@ -389,25 +387,28 @@ const muteToggle = e => {
 		video.muted = muted;
 	}
 }
-const showFileInput = e => {
-	const elems = [...e.target.files].map( file => {
-		if ( file.type.match( /(^image\/|^video\/)/ ) ) {
-			const isVideo = file.type.match( /^video\// );
-			const elem = document.createElement( isVideo ? "video" : "img" );
-			if ( isVideo ) {
-				// elem.volume = "0";
-				elem.volume = document.querySelector( "#volumeSlider" ).value;
-				elem.muted = muted;
-				elem.loop = true;
-				elem.autoplay = true;
-			}
-			const reader = new FileReader();
-			reader.onload = e => elem.src = e.target.result;
-			reader.readAsDataURL( file );
-			return elem;
+const loadFile = file => {
+	if ( file.type.match( /(^image\/|^video\/)/ ) ) {
+		const isVideo = file.type.match( /^video\// );
+		const elem = document.createElement( isVideo ? "video" : "img" );
+		if ( isVideo ) {
+			// elem.volume = "0";
+			elem.volume = document.querySelector( "#volumeSlider" ).value;
+			elem.muted = muted;
+			elem.loop = true;
+			elem.autoplay = true;
 		}
-	} );
-	document.querySelector( "#preview" ).replaceChildren( ...elems );
+		elem.src = window.URL.createObjectURL( file );
+		document.querySelector( "#preview" ).replaceChildren( elem );
+	}
+}
+const dropFile = e => {
+	e.preventDefault();
+	loadFile( e.dataTransfer.files[0] );
+	document.querySelector( "#menu" ).style.display = "";
+}
+const fileInput = e => {
+	loadFile( e.target.files[0] );
 }
 
 const audioClick = document.querySelector( "#audioClick" );
@@ -415,6 +416,7 @@ const audioComplete = document.querySelector( "#audioComplete" );
 audioClick.volume = 1;
 audioComplete.volume = 1;
 let muted = true;
+let timeAtPreviousFrame = 0;
 const puzzle = {};
 const camera = { // all camera x and y values are in puzzle coordinate, not viewport coordinates.
 	"x" : -50 ,
@@ -427,13 +429,14 @@ const camera = { // all camera x and y values are in puzzle coordinate, not view
 	"mousedownX" : 0 ,
 	"mousedownY" : 0 ,
 };
-let timeAtPreviousFrame = 0;
-document.querySelector( "#fileInput" ).addEventListener( "change" , showFileInput );
+document.querySelector( "#fileInput" ).addEventListener( "change" , fileInput );
 document.querySelector( "#startPuzzle" ).addEventListener( "click" , puzzleInit );
 document.querySelector( "#menuButton" ).addEventListener( "click" , menuToggle );
 document.querySelector( "#mute" ).addEventListener( "click" , muteToggle );
 document.querySelector( "#volumeSlider" ).addEventListener( "input" , setVolume );
 window.addEventListener( "resize" , updateCanvasSize );
+window.addEventListener( "drop" , dropFile );
+window.addEventListener( "dragover" , e => e.preventDefault() );
 
 // ============================================================================
 // ========================= init WebGL canvas stuff ==========================
@@ -499,24 +502,18 @@ const backgroundTexture = createTexture( [70 , 130 , 180 , 255] ); // #4682B4 li
 
 
 
-
 // =====plans=====
 
-// add a reload video button
-	// or fix the video shitting up????
+
+// spawn pieces in center of play area
+	// or center play area on 0,0
 
 // draw faint lines between connected pieces
 	// currently have a bad hack solution where I just draw slightly smaller squares.
 	// It's currently bad and I'd prefer to have solid black lines.
 	// look in to drawing gl lines instead of triangles.
 
-
-// timer. end timer on completion
 // favicon
-
-// proper ui for options before starting the puzzle.
-// this includes a pop open menu that's open by default, containing all the buttons to start a puzzle and the image preview.
-// Need a mute button and a visual timer that shows hours, minutes and seconds.
 
 // add server and multiplayer support
 	// it'd be sick if it's peer to peer somehow.
