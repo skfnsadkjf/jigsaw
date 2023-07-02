@@ -60,5 +60,6 @@ canvas{
 #menuButton>svg{ top: 2px; }
 #mute>svg{ top: 1.5px; }
 #mute{ padding-right: 11px; }
+#volumeSlider>input{ height: 10px; }
 
 

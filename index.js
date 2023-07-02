@@ -317,6 +317,9 @@ const generatePuzzleDimensions = ( width , height , desiredPieces ) => {
 }
 const puzzleInit = () => {
 	const s = document.querySelector( "#preview>*" ); // get first child of preview
+	if ( s == null ) {
+		return
+	}
 	const desiredPieces = parseInt( document.querySelector( "#piecesInput" ).value );
 	puzzle.source = s;
 	puzzle.sourceReadyToDraw = false;
@@ -385,7 +388,9 @@ const menuToggle = e => {
 }
 const muteToggle = e => {
 	muted = !muted;
+	console.log( e.currentTarget );
 	[...e.currentTarget.children].forEach( v => toggleDisplayNone( v ) );
+	toggleDisplayNone( document.querySelector( "#volumeSlider" ) );
 	const video = document.querySelector( "#preview>video" );
 	if ( video ) {
 		video.muted = muted;
@@ -397,7 +402,7 @@ const loadFile = file => {
 		const elem = document.createElement( isVideo ? "video" : "img" );
 		if ( isVideo ) {
 			// elem.volume = "0";
-			elem.volume = document.querySelector( "#volumeSlider" ).value;
+			elem.volume = document.querySelector( "#volumeSlider>input" ).value;
 			elem.muted = muted;
 			elem.loop = true;
 			elem.autoplay = true;
@@ -413,6 +418,10 @@ const dropFile = e => {
 }
 const fileInput = e => {
 	loadFile( e.target.files[0] );
+}
+const submitPiecesForm = e => {
+	puzzleInit();
+	e.preventDefault();
 }
 
 const audioClick = document.querySelector( "#audioClick" );
@@ -434,6 +443,7 @@ const camera = { // all camera x and y values are in puzzle coordinate, not view
 	"mousedownY" : 0 ,
 };
 document.querySelector( "#fileInput" ).addEventListener( "change" , fileInput );
+document.querySelector( "#piecesInputForm" ).addEventListener( "submit" , submitPiecesForm );
 document.querySelector( "#startPuzzle" ).addEventListener( "click" , puzzleInit );
 document.querySelector( "#menuButton" ).addEventListener( "click" , menuToggle );
 document.querySelector( "#mute" ).addEventListener( "click" , muteToggle );
